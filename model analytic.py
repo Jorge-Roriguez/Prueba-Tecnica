@@ -1,9 +1,10 @@
-# ------------------------- Librerias requeridas -------------------------
+# ------------------------- Librerias requeridas --------------------------------------------
 
 # Tratamiento de datos
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import StandardScaler 
+from sklearn.metrics import accuracy_score
 
 # Visualización de datos
 from plotly.subplots import make_subplots
@@ -18,14 +19,13 @@ from sklearn.feature_selection import RFE
 from sklearn.model_selection import cross_val_predict, cross_val_score, cross_validate
 from sklearn.model_selection import RandomizedSearchCV 
 
-
 # Modelos Candidatos 
 from sklearn.linear_model import LogisticRegression      # Regresión logística
 from sklearn.ensemble import RandomForestClassifier      # Clasificador bosques aleatorios
 from xgboost import XGBClassifier                        # XGBoost 
 
 
-# ------------------------- Exploración inicial de los datos -------------------------
+# ------------------------- Exploración inicial de los datos -----------------------------------------------------------------
 
 # Importación de los datos
 features = ('https://raw.githubusercontent.com/Jorge-Roriguez/Prueba-Tecnica/main/Datos/varaibles_transaccionales_nequi.csv')
@@ -65,30 +65,44 @@ df_2023 # Datos de las personas del 2023
 # Gráfico de las personas que se encuentran en mora 
 fig = make_subplots(rows = 1, cols = 1)
 fig.add_trace(
-    go.Histogram(x = df_features['target'], name = 'Estado de mora de los clientes', marker_color = 'thistle'),
+    go.Histogram(x = df_features['target'], name = 'Estado de mora de los clientes', marker_color = 'cornflowerblue', xbins=dict(size=0.5,)),
     row = 1, col = 1
 )
 fig.update_layout(
-    title_text = "Estado de mora de los clientes",
-    template = 'simple_white')
+    title_text = "Estado de los clientes con sus obligaciones",
+    template = 'simple_white',
+    xaxis = dict(
+        ticktext = ['Clientes al día', 'Clientes en mora'],
+        tickvals = [0, 1],
+      )
+)
 fig.show();
 print("Cantidad de cientes en mora: ", df_features['target'].sum(), 
       "\nLo que equivale a: ", round(df_features['target'].sum()/len(df_features) * 100, 2), 
-      "% de los empleados de la compañia")
+      "% del total de los clientes")
 
 # Veamos ahora los clientes en mora por los años 2022 y 2023
 fig = make_subplots(rows = 1, cols = 2)
 fig.add_trace(
-    go.Histogram(x = df_2022['target'], name = 'Clientes 2022', marker_color = 'darkmagenta'),
+    go.Histogram(x = df_2022['target'], name = 'Clientes 2022', marker_color = 'darkmagenta', xbins=dict(size=0.5,)),
     row = 1, col = 1
 )
 fig.add_trace(
-    go.Histogram(x = df_2023['target'], name = 'Clientes 2023', marker_color = 'deeppink'),
+    go.Histogram(x = df_2023['target'], name = 'Clientes 2023', marker_color = 'deeppink', xbins=dict(size=0.5,)),
     row = 1, col = 2
 )
 fig.update_layout(
-    title_text = "Estado de mora de los clientes",
-    template = 'simple_white')
+    title_text = "Estado de los clientes con sus obligaciones",
+    template = 'simple_white',
+    xaxis1 = dict( # Para el primer gráfico
+        ticktext = ['Cliente al día', 'Cliente en mora'],
+        tickvals = [0, 1],
+      ),
+    xaxis2 = dict( # Para el segundo gráfico
+        ticktext = ['Cliente al día', 'Cliente en mora'], 
+        tickvals = [0, 1],
+      ),
+)
 fig.show();
 print('Porcentaje de clientes en mora 2022: ',round(df_2022['target'].sum()/len(df_2022) * 100, 2), '%',
       '\nPorcentaje de clientes en mora 2023: ',round(df_2023['target'].sum()/len(df_2023) * 100, 2), '%')
@@ -110,7 +124,7 @@ fig.update_layout(
     template = 'simple_white')
 fig.show();
 
-# ------------------------- terminar de normalizar datos -------------------------
+# ------------------------- terminar de normalizar datos ----------------------------------------------
 
 # Separamos variable objetivo y variables explicativas
 y = df_features.target
@@ -123,6 +137,7 @@ x11 = scaler.transform(x1)
 
 x['TransactionValue_PSE'] =  x11
 x # Datos totalmente normalizados
+
 
 # ------------------------- Selección de variables (Método Wrapper) -------------------------
 
@@ -190,9 +205,6 @@ def medir_modelos(modelos, scoring, X, y, cv):
     metric_modelos.columns = ["logistic_r","rf_classifier","xgboost_classifier"]
     return metric_modelos
 
-# Métrica de desempeño
-from sklearn.metrics import accuracy_score
-
 # Desempeño con todas las variables
 accu_df = medir_modelos(modelos, 'accuracy', x, y, 5)
 accu_df
@@ -201,14 +213,15 @@ accu_df
 acc_df_sel = medir_modelos(modelos, 'accuracy', x_selec, y, 5)
 acc_df_sel
 
-accu_df.plot(kind = 'box')
-acc_df_sel.plot(kind = 'box')
+# Distribución del desempeño
+accu_df.plot(kind = 'box', title= 'Desempeño con todas las variables')
+acc_df_sel.plot(kind = 'box', title= 'Desempeño con varibles seleccionadas')
 
-# -------------------------------- Afinamiento de hiperparámetros xgboost --------------------------------
+
+# -------------------------------- Afinamiento de hiperparámetros xgboost -----------------------------------
 
 # Parámetros
 param_grid = [{'max_depth': [3,4,5,6,7], 'eta':[0.01, 0.09, 0.1, 0.2, 0.4],'subsample': [0,3,0.4,0.5,0.7]}]
-
 
 research = RandomizedSearchCV(m_xgb, param_distributions = param_grid,
                               n_iter = 5, scoring='accuracy')
@@ -223,7 +236,8 @@ df_resultados[["params","mean_test_score"]].sort_values(by = "mean_test_score", 
 xg_final = research.best_estimator_
 
 
-# -------------------------------- Predicciones --------------------------------
+# -------------------------------- Predicciones ---------------------------------------------------------------------------------------------
+
 predictions = cross_val_predict(xg_final, x_selec, y, cv = 5)
 df_pred = pd.DataFrame(predictions, columns = ['pred']) 
 
@@ -242,5 +256,31 @@ plt.show()
 # Probabilidades de los clientes de estar o no en mora
 probabilidades = xg_final.predict_proba(x_selec)
 df_prob = pd.DataFrame(probabilidades, columns = ['Prob al dia', 'Prob en mora'])
-
 df_final = pd.concat([df_features, df_pred, df_prob], axis = 1)
+
+# Clientes con mayores probabilidades de estar al día con sus obligaciones
+df_final[['Prob al dia']].sort_values(by = 'Prob al dia', ascending= False).head(10)
+
+# Clientes con una probabilidad mayor al 80% (Alta)
+df_final[df_final['Prob al dia'] >= 0.8]
+print("Clientes con probabilidad alta de adquirir un préstamo: ",
+      round(df_final[df_final['Prob al dia'] >= 0.8]['Prob al dia'].count()/ len(df_final),2)*100,'%')
+
+# Clientes con una probabilidad entre 80% y 70% (Media)
+print("Clientes con probabilidad media de adquirir un préstamo: ",
+      round(df_final[(df_final['Prob al dia'] >= 0.7) & (df_final['Prob al dia'] < 0.8)]['Prob al dia'].count()/ len(df_final),2)*100, '%')
+
+# Clientes con una probabilidad menos de 70% (Baja)
+print("Clientes con probabilidad baja de adquirir un préstamo: ",
+      round(df_final[df_final['Prob al dia'] < 0.7]['Prob al dia'].count()/ len(df_final),2)*100,'%')
+
+# Presentación de los resultados en un diagrama de tortas
+datos0 = [3, 12, 85]
+colores = ['cornflowerblue', 'deeppink', 'darkmagenta']
+labels = ["Probabilidad Alta", "Probabilidad Media", "Probabilidad Baja"]
+plt.pie(datos0, labels = labels, colors = colores,  autopct="%0.0f%%")
+plt.title('Segmentación de clientes para adquirir un crédito')
+plt.show()
+
+
+# -------------------------------------------------------------------------------------------------------------------------------------------
